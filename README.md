@@ -11,7 +11,7 @@ Mobile-friendly web interface for managing Claude Code sessions from your phone.
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.24+
 - tmux
 - ttyd (optional but recommended for embedded terminal)
 

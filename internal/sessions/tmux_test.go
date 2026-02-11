@@ -58,9 +58,9 @@ func TestTmuxRunnerListSessions(t *testing.T) {
 	// This should not error even if tmux server is not running
 	sessions, err := runner.ListSessions()
 	if err != nil {
-		// "no server running" is acceptable
+		// "no server running" is acceptable — tmux just isn't running
 		if !strings.Contains(err.Error(), "no server") {
-			t.Logf("ListSessions returned error (acceptable in test env): %v", err)
+			t.Errorf("ListSessions unexpected error: %v", err)
 		}
 	}
 	_ = sessions

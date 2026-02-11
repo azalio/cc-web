@@ -95,12 +95,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		var req sessions.CreateRequest
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
-			return
-		}
-		if err := json.Unmarshal(body, &req); err != nil {
+		if err := readJSON(r, &req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 			return
 		}
@@ -115,7 +110,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 		sess, err := s.mgr.Create(req)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			writeCreateError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, sess)
@@ -168,6 +163,10 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 			return
 		}
+		if req.Text == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "text is required"})
+			return
+		}
 		if err := s.mgr.SendText(id, req.Text); err != nil {
 			writeSessionError(w, err)
 			return
@@ -195,6 +194,10 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := readJSON(r, &req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+			return
+		}
+		if len(req.Keys) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "keys is required"})
 			return
 		}
 		if err := s.mgr.SendKeys(id, req.Keys); err != nil {
@@ -272,7 +275,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	sessionList := s.mgr.List()
 	running := 0
 	for _, sess := range sessionList {
-		if sess.Status == "running" {
+		if sess.Status == sessions.StatusRunning {
 			running++
 		}
 	}
@@ -305,6 +308,19 @@ func readJSON(r *http.Request, v interface{}) error {
 // tokenMatch performs constant-time comparison to prevent timing attacks.
 func tokenMatch(provided, expected string) bool {
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+}
+
+// writeCreateError maps session creation errors to appropriate HTTP status codes.
+// User errors (bad path, max sessions) get 400; internal errors (tmux/ttyd) get 500.
+func writeCreateError(w http.ResponseWriter, err error) {
+	msg := err.Error()
+	if strings.Contains(msg, "not in allowed list") ||
+		strings.Contains(msg, "does not exist or is not a directory") ||
+		strings.Contains(msg, "max active sessions") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+	} else {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg})
+	}
 }
 
 // writeSessionError maps session manager errors to appropriate HTTP status codes.

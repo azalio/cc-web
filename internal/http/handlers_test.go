@@ -153,10 +153,10 @@ func TestHealthz_NoAuth(t *testing.T) {
 	if resp["status"] != "ok" {
 		t.Errorf("status = %q, want %q", resp["status"], "ok")
 	}
-	if resp["sessions_total"].(float64) != 0 {
+	if total, ok := resp["sessions_total"].(float64); !ok || total != 0 {
 		t.Errorf("sessions_total = %v, want 0", resp["sessions_total"])
 	}
-	if resp["sessions_running"].(float64) != 0 {
+	if running, ok := resp["sessions_running"].(float64); !ok || running != 0 {
 		t.Errorf("sessions_running = %v, want 0", resp["sessions_running"])
 	}
 }

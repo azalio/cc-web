@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -307,18 +308,25 @@ func (m *Manager) Cleanup() {
 func (m *Manager) saveToFile() {
 	data, err := json.MarshalIndent(m.sessions, "", "  ")
 	if err != nil {
+		log.Printf("sessions: marshal error: %v", err)
 		return
 	}
-	_ = os.WriteFile(m.cfg.SessionsFile, data, 0600)
+	if err := os.WriteFile(m.cfg.SessionsFile, data, 0600); err != nil {
+		log.Printf("sessions: save error: %v", err)
+	}
 }
 
 func (m *Manager) loadFromFile() {
 	data, err := os.ReadFile(m.cfg.SessionsFile)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("sessions: read error: %v", err)
+		}
 		return
 	}
 	var sessions map[string]*Session
 	if err := json.Unmarshal(data, &sessions); err != nil {
+		log.Printf("sessions: corrupt sessions file: %v", err)
 		return
 	}
 	m.sessions = sessions

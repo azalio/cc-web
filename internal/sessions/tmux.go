@@ -88,9 +88,11 @@ func (t *TmuxRunner) ListSessions() ([]string, error) {
 	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		// "no server running" means no sessions
-		if strings.Contains(string(out), "no server running") ||
-			strings.Contains(string(out), "no sessions") {
+		// tmux not available or no sessions — all acceptable
+		outStr := string(out)
+		if strings.Contains(outStr, "no server running") ||
+			strings.Contains(outStr, "no sessions") ||
+			strings.Contains(outStr, "error connecting") {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("tmux list-sessions: %s: %w", string(out), err)

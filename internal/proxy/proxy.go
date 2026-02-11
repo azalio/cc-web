@@ -23,8 +23,7 @@ func TtydProxy(port int, basePath string) http.Handler {
 			req.URL.Host = target.Host
 			req.Host = target.Host
 
-			// Strip our base path prefix if ttyd doesn't use base-path
-			// or keep it if ttyd is configured with matching base-path
+			// Prepend basePath if not already present (ttyd expects its base-path prefix)
 			if !strings.HasPrefix(req.URL.Path, basePath) {
 				req.URL.Path = basePath + req.URL.Path
 			}

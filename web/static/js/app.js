@@ -29,7 +29,9 @@
 
     async listSessions() {
       const resp = await this.fetch('/api/sessions');
-      return resp.json();
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to list sessions');
+      return data;
     },
 
     async createSession(name, cwd, startCmd) {
@@ -44,7 +46,9 @@
 
     async getSession(id) {
       const resp = await this.fetch(`/api/sessions/${id}`);
-      return resp.json();
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to get session');
+      return data;
     },
 
     async killSession(id) {
@@ -107,7 +111,7 @@
     authToken = token;
     localStorage.setItem('cc_auth_token', token);
     // Set cookie for iframe auth
-    document.cookie = `auth_token=${token};path=/;SameSite=Strict`;
+    document.cookie = `auth_token=${token};path=/;SameSite=Strict;Secure`;
     showView('sessions');
     refreshSessions();
   }
@@ -158,20 +162,23 @@
       return;
     }
 
-    list.innerHTML = filtered.map(s => `
-      <div class="session-card" data-id="${s.id}">
+    list.innerHTML = filtered.map(s => {
+      const safeId = escapeHtml(s.id);
+      const safeAttrId = escapeAttr(s.id);
+      return `
+      <div class="session-card" data-id="${safeAttrId}">
         <div class="session-card-header">
           <h3>${escapeHtml(s.name || s.id)}</h3>
-          <span class="status-badge status-${s.status}">${s.status}</span>
+          <span class="status-badge status-${escapeAttr(s.status)}">${escapeHtml(s.status)}</span>
         </div>
         ${s.cwd ? `<div class="cwd">${escapeHtml(s.cwd)}</div>` : ''}
         <div class="session-card-actions">
-          <button class="btn btn-primary btn-sm" onclick="app.openSession('${s.id}')">Open</button>
-          ${s.status === 'running' ? `<button class="btn btn-ghost btn-sm" onclick="app.interruptSession('${s.id}')">Interrupt</button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="app.killSession('${s.id}')">Kill</button>
+          <button class="btn btn-primary btn-sm" onclick="app.openSession('${safeAttrId}')">Open</button>
+          ${s.status === 'running' ? `<button class="btn btn-ghost btn-sm" onclick="app.interruptSession('${safeAttrId}')">Interrupt</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="app.killSession('${safeAttrId}')">Kill</button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   }
 
   // --- Open Session ---
@@ -329,6 +336,10 @@
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   // --- Init ---

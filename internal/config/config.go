@@ -44,6 +44,10 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("auth_token must be set to a secure value in config")
 	}
 
+	if cfg.TtydBasePort > cfg.TtydMaxPort {
+		return nil, fmt.Errorf("ttyd_base_port (%d) must be <= ttyd_max_port (%d)", cfg.TtydBasePort, cfg.TtydMaxPort)
+	}
+
 	return cfg, nil
 }
 
