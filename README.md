@@ -53,6 +53,7 @@ All API endpoints require `Authorization: Bearer <token>` header (or `?token=<to
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/healthz` | Health check (no auth) |
 | GET | `/api/sessions` | List all sessions |
 | POST | `/api/sessions` | Create session `{name, cwd, start_cmd}` |
 | GET | `/api/sessions/{id}` | Get session details |
@@ -67,13 +68,60 @@ All API endpoints require `Authorization: Bearer <token>` header (or `?token=<to
 - Bearer token authentication on all endpoints
 - Working directory allowlist prevents arbitrary path access
 - ttyd binds to 127.0.0.1 only (not exposed directly)
-- Recommended: use with Tailscale for secure remote access
+- Health endpoint `/healthz` (no auth) for tunnel/LB monitoring
 
-## Network Access
+## Network Access (Cloudflare Tunnel — recommended)
 
-For phone access, either:
+Cloudflare Tunnel gives you HTTPS access from your phone without opening ports, without conflicting with VPNs, and with Zero Trust authentication.
 
-- **Tailscale**: `tailscale serve 8787` (recommended)
+```
+Phone → HTTPS → Cloudflare Edge → Encrypted Tunnel → Mac (localhost:8787)
+```
+
+### Automated setup
+
+```bash
+./scripts/setup-cloudflare-tunnel.sh your-domain.com
+```
+
+This will:
+1. Install `cloudflared` if needed
+2. Authenticate with Cloudflare (opens browser)
+3. Create a tunnel named `claude-gateway`
+4. Write `~/.cloudflared/config.yml`
+5. Create DNS CNAME `claude.your-domain.com`
+6. Validate the config
+
+See `configs/cloudflared-config.example.yml` for a manual config template.
+
+### Start the tunnel
+
+```bash
+# Manual
+cloudflared tunnel run claude-gateway
+
+# Install as system service (auto-start on boot)
+sudo cloudflared service install
+```
+
+### Protect with Cloudflare Access
+
+Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com) → Access → Applications:
+1. Add Application → Self-hosted
+2. Application domain: `claude.your-domain.com`
+3. Policy: Allow → your email (or One-time PIN / GitHub login)
+
+### Auto-start the gateway (macOS)
+
+```bash
+# Edit paths in the plist, then:
+cp configs/com.claude-gateway.plist.example ~/Library/LaunchAgents/com.claude-gateway.plist
+launchctl load ~/Library/LaunchAgents/com.claude-gateway.plist
+```
+
+### Other access methods
+
+- **Tailscale**: `tailscale serve 8787`
 - **Local network**: Change `listen_addr` to `0.0.0.0:8787` (LAN only)
 - **SSH tunnel**: `ssh -L 8787:localhost:8787 your-mac`
 

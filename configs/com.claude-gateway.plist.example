@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS LaunchAgent for Claude Code Gateway
+
+  Install:
+    1. Edit paths below to match your setup
+    2. cp configs/com.claude-gateway.plist.example ~/Library/LaunchAgents/com.claude-gateway.plist
+    3. launchctl load ~/Library/LaunchAgents/com.claude-gateway.plist
+
+  Manage:
+    launchctl start com.claude-gateway
+    launchctl stop com.claude-gateway
+    launchctl unload ~/Library/LaunchAgents/com.claude-gateway.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.claude-gateway</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- EDIT: path to your built cc-web binary -->
+        <string>/Users/YOUR_USERNAME/cc-web/cc-web</string>
+        <string>-config</string>
+        <!-- EDIT: path to your config -->
+        <string>/Users/YOUR_USERNAME/cc-web/configs/config.yaml</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <!-- EDIT: path to your cc-web project directory -->
+    <string>/Users/YOUR_USERNAME/cc-web</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/claude-gateway.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/claude-gateway.stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

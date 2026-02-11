@@ -1,0 +1,22 @@
+# Cloudflare Tunnel configuration for Claude Code Gateway
+#
+# Copy this file to ~/.cloudflared/config.yml and fill in:
+#   - tunnel: your tunnel ID (from `cloudflared tunnel create claude-gateway`)
+#   - credentials-file: path to the JSON credentials file
+#   - hostname: your subdomain.domain.com
+#
+# Or run: ./scripts/setup-cloudflare-tunnel.sh your-domain.com
+
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /Users/YOUR_USERNAME/.cloudflared/YOUR_TUNNEL_ID.json
+
+ingress:
+  - hostname: claude.YOUR_DOMAIN.com
+    service: http://localhost:8787
+    originRequest:
+      # Support WebSocket upgrade for ttyd terminal
+      noTLSVerify: false
+      connectTimeout: 10s
+      noHappyEyeballs: false
+  # Catch-all rule (required)
+  - service: http_status:404

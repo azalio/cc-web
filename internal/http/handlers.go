@@ -34,6 +34,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
+	// Health check (no auth — used by Cloudflare Tunnel, load balancers, monitoring)
+	s.mux.HandleFunc("/healthz", s.handleHealthz)
+
 	// API routes (auth required)
 	s.mux.HandleFunc("/api/sessions", s.authMiddleware(s.handleSessions))
 	s.mux.HandleFunc("/api/sessions/", s.authMiddleware(s.handleSessionAction))
@@ -250,6 +253,30 @@ func (s *Server) handleTerminalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxy.ServeHTTP(w, r)
+}
+
+// handleHealthz returns service health status (no auth required).
+// Used by Cloudflare Tunnel, load balancers, and monitoring.
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	sessionList := s.mgr.List()
+	running := 0
+	for _, sess := range sessionList {
+		if sess.Status == "running" {
+			running++
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":           "ok",
+		"sessions_total":   len(sessionList),
+		"sessions_running": running,
+	})
 }
 
 func isWebSocket(r *http.Request) bool {

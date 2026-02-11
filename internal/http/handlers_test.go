@@ -133,6 +133,34 @@ func TestInterrupt_NotFound(t *testing.T) {
 	}
 }
 
+func TestHealthz_NoAuth(t *testing.T) {
+	cfg := testConfig()
+	mgr := sessions.NewManager(cfg)
+	srv := NewServer(cfg, mgr)
+
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["status"] != "ok" {
+		t.Errorf("status = %q, want %q", resp["status"], "ok")
+	}
+	if resp["sessions_total"].(float64) != 0 {
+		t.Errorf("sessions_total = %v, want 0", resp["sessions_total"])
+	}
+	if resp["sessions_running"].(float64) != 0 {
+		t.Errorf("sessions_running = %v, want 0", resp["sessions_running"])
+	}
+}
+
 func TestTokenInQueryParam(t *testing.T) {
 	cfg := testConfig()
 	mgr := sessions.NewManager(cfg)
