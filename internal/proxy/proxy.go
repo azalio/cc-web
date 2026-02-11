@@ -10,7 +10,12 @@ import (
 
 // TtydProxy creates a reverse proxy handler for a ttyd instance.
 func TtydProxy(port int, basePath string) http.Handler {
-	target, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	if err != nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "internal proxy error", http.StatusInternalServerError)
+		})
+	}
 
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {

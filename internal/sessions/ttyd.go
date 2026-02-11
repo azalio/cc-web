@@ -14,6 +14,7 @@ type TtydManager struct {
 	cfg       *config.Config
 	processes map[string]*exec.Cmd // tmuxName -> ttyd process
 	usedPorts map[int]bool
+	portMap   map[string]int // tmuxName -> port (for releasing on stop)
 	ttydPath  string
 }
 
@@ -29,6 +30,7 @@ func NewTtydManager(cfg *config.Config) *TtydManager {
 		cfg:       cfg,
 		processes: make(map[string]*exec.Cmd),
 		usedPorts: make(map[int]bool),
+		portMap:   make(map[string]int),
 		ttydPath:  path,
 	}
 }
@@ -69,6 +71,10 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 			_ = cmd.Process.Kill()
 			_ = cmd.Wait()
 		}
+		// Release old port
+		if oldPort, ok := t.portMap[tmuxName]; ok {
+			delete(t.usedPorts, oldPort)
+		}
 	}
 
 	cmd := exec.Command(t.ttydPath,
@@ -85,19 +91,27 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 
 	t.processes[tmuxName] = cmd
 	t.usedPorts[port] = true
+	t.portMap[tmuxName] = port
 
-	// Monitor process in background
+	// Monitor process in background — guard cleanup against stale entries
 	go func() {
 		_ = cmd.Wait()
 		t.mu.Lock()
-		delete(t.processes, tmuxName)
+		// Only clean up if this is still the registered process (not replaced)
+		if current, ok := t.processes[tmuxName]; ok && current == cmd {
+			delete(t.processes, tmuxName)
+			if p, ok := t.portMap[tmuxName]; ok {
+				delete(t.usedPorts, p)
+				delete(t.portMap, tmuxName)
+			}
+		}
 		t.mu.Unlock()
 	}()
 
 	return nil
 }
 
-// Stop kills the ttyd process for a tmux session.
+// Stop kills the ttyd process for a tmux session and releases its port.
 func (t *TtydManager) Stop(tmuxName string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -109,9 +123,13 @@ func (t *TtydManager) Stop(tmuxName string) {
 		}
 		delete(t.processes, tmuxName)
 	}
+	if port, ok := t.portMap[tmuxName]; ok {
+		delete(t.usedPorts, port)
+		delete(t.portMap, tmuxName)
+	}
 }
 
-// StopAll kills all ttyd processes.
+// StopAll kills all ttyd processes and releases all ports.
 func (t *TtydManager) StopAll() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -122,5 +140,11 @@ func (t *TtydManager) StopAll() {
 			_ = cmd.Wait()
 		}
 		delete(t.processes, name)
+	}
+	for k := range t.usedPorts {
+		delete(t.usedPorts, k)
+	}
+	for k := range t.portMap {
+		delete(t.portMap, k)
 	}
 }

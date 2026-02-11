@@ -1,7 +1,10 @@
 package sessions
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +13,27 @@ import (
 
 	"github.com/user/cc-web/internal/config"
 )
+
+// ErrNotFound is returned when a session ID does not exist.
+var ErrNotFound = errors.New("session not found")
+
+// IsNotFound reports whether the error indicates a missing session.
+func IsNotFound(err error) bool {
+	return errors.Is(err, ErrNotFound)
+}
+
+// notFoundError wraps ErrNotFound with the session ID for context.
+type notFoundError struct {
+	id string
+}
+
+func (e *notFoundError) Error() string {
+	return fmt.Sprintf("session %q not found", e.id)
+}
+
+func (e *notFoundError) Unwrap() error {
+	return ErrNotFound
+}
 
 // Manager manages Claude Code sessions (tmux + ttyd).
 type Manager struct {
@@ -98,8 +122,8 @@ func (m *Manager) Recover() error {
 
 // List returns all sessions with refreshed status.
 func (m *Manager) List() []*Session {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	result := make([]*Session, 0, len(m.sessions))
 	for _, s := range m.sessions {
@@ -117,8 +141,8 @@ func (m *Manager) List() []*Session {
 
 // Get returns a session by ID.
 func (m *Manager) Get(id string) (*Session, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	s, ok := m.sessions[id]
 	if ok {
 		if m.tmux.HasSession(s.TmuxName) {
@@ -142,8 +166,14 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if len(m.sessions) >= m.cfg.MaxSessions {
-		return nil, fmt.Errorf("max sessions (%d) reached", m.cfg.MaxSessions)
+	activeCount := 0
+	for _, s := range m.sessions {
+		if s.Status != StatusExited {
+			activeCount++
+		}
+	}
+	if activeCount >= m.cfg.MaxSessions {
+		return nil, fmt.Errorf("max active sessions (%d) reached", m.cfg.MaxSessions)
 	}
 
 	if !m.cfg.IsPathAllowed(req.CWD) {
@@ -161,7 +191,8 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	now := time.Now()
-	tmuxName := fmt.Sprintf("%s%s-%s", m.cfg.TmuxPrefix, now.Format("20060102-1504"), sanitizeName(req.Name))
+	suffix := randomSuffix()
+	tmuxName := fmt.Sprintf("%s%s-%s-%s", m.cfg.TmuxPrefix, now.Format("20060102-1504"), sanitizeName(req.Name), suffix)
 	id := tmuxName
 
 	// Allocate ttyd port
@@ -207,7 +238,7 @@ func (m *Manager) Kill(id string) error {
 
 	s, ok := m.sessions[id]
 	if !ok {
-		return fmt.Errorf("session %q not found", id)
+		return &notFoundError{id: id}
 	}
 
 	m.ttyd.Stop(s.TmuxName)
@@ -223,7 +254,7 @@ func (m *Manager) SendText(id, text string) error {
 	s, ok := m.sessions[id]
 	m.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("session %q not found", id)
+		return &notFoundError{id: id}
 	}
 	return m.tmux.SendKeys(s.TmuxName, text)
 }
@@ -234,7 +265,7 @@ func (m *Manager) Interrupt(id string) error {
 	s, ok := m.sessions[id]
 	m.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("session %q not found", id)
+		return &notFoundError{id: id}
 	}
 	return m.tmux.Interrupt(s.TmuxName)
 }
@@ -245,7 +276,7 @@ func (m *Manager) SendKeys(id string, keys []string) error {
 	s, ok := m.sessions[id]
 	m.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("session %q not found", id)
+		return &notFoundError{id: id}
 	}
 
 	// Map friendly names to tmux key tokens
@@ -265,6 +296,12 @@ func (m *Manager) GetTtydPort(id string) (int, bool) {
 		return 0, false
 	}
 	return s.TtydPort, true
+}
+
+// Cleanup stops all ttyd processes. Called during graceful shutdown.
+// tmux sessions are left alive so they persist across gateway restarts.
+func (m *Manager) Cleanup() {
+	m.ttyd.StopAll()
 }
 
 func (m *Manager) saveToFile() {
@@ -302,6 +339,14 @@ func sanitizeName(name string) string {
 		s = s[:30]
 	}
 	return s
+}
+
+func randomSuffix() string {
+	b := make([]byte, 3)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano()%100000)
+	}
+	return hex.EncodeToString(b)
 }
 
 func mapKey(key string) string {

@@ -187,11 +187,10 @@
       badge.className = `status-badge status-${session.status}`;
     }
 
-    // Load terminal iframe
+    // Load terminal iframe (auth via cookie, not URL query param)
     const container = $('#terminal-container');
     if (session && session.terminal_url) {
-      const termUrl = `${session.terminal_url}?token=${encodeURIComponent(authToken)}`;
-      container.innerHTML = `<iframe src="${termUrl}" allow="fullscreen"></iframe>`;
+      container.innerHTML = `<iframe src="${session.terminal_url}" allow="fullscreen"></iframe>`;
     } else {
       container.innerHTML = `
         <div class="terminal-placeholder">

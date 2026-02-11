@@ -37,12 +37,20 @@ func (t *TmuxRunner) KillSession(tmuxName string) error {
 	return nil
 }
 
-// SendKeys sends text followed by Enter to the tmux session.
+// SendKeys sends literal text followed by Enter to the tmux session.
+// Uses -l flag to prevent text like "Enter" being interpreted as key names.
 func (t *TmuxRunner) SendKeys(tmuxName, text string) error {
-	cmd := exec.Command("tmux", "send-keys", "-t", tmuxName, text, "Enter")
+	// Send text literally (no key interpretation)
+	cmd := exec.Command("tmux", "send-keys", "-t", tmuxName, "-l", text)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("tmux send-keys: %s: %w", string(out), err)
+	}
+	// Send Enter separately as a key name
+	cmd2 := exec.Command("tmux", "send-keys", "-t", tmuxName, "Enter")
+	out2, err := cmd2.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tmux send-keys Enter: %s: %w", string(out2), err)
 	}
 	return nil
 }

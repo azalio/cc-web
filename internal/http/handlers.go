@@ -1,6 +1,7 @@
 package http
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,7 +56,7 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		if token == "" {
 			token = r.URL.Query().Get("token")
 		}
-		if token != s.cfg.AuthToken {
+		if !tokenMatch(token, s.cfg.AuthToken) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
@@ -77,7 +78,7 @@ func (s *Server) authTerminal(next http.HandlerFunc) http.HandlerFunc {
 				token = c.Value
 			}
 		}
-		if token != s.cfg.AuthToken {
+		if !tokenMatch(token, s.cfg.AuthToken) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
@@ -168,7 +169,7 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.mgr.SendText(id, req.Text); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			writeSessionError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
@@ -179,7 +180,7 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.mgr.Interrupt(id); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			writeSessionError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "interrupted"})
@@ -197,7 +198,7 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.mgr.SendKeys(id, req.Keys); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			writeSessionError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "keys sent"})
@@ -208,7 +209,7 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.mgr.Kill(id); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			writeSessionError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "killed"})
@@ -236,7 +237,11 @@ func (s *Server) handleTerminalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reverse proxy to ttyd
-	target, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	if err != nil {
+		http.Error(w, "internal proxy error", http.StatusInternalServerError)
+		return
+	}
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = target.Scheme
@@ -295,4 +300,18 @@ func readJSON(r *http.Request, v interface{}) error {
 		return err
 	}
 	return json.Unmarshal(body, v)
+}
+
+// tokenMatch performs constant-time comparison to prevent timing attacks.
+func tokenMatch(provided, expected string) bool {
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+}
+
+// writeSessionError maps session manager errors to appropriate HTTP status codes.
+func writeSessionError(w http.ResponseWriter, err error) {
+	if sessions.IsNotFound(err) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+	} else {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 }
