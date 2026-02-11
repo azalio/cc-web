@@ -17,7 +17,7 @@ func NewTmuxRunner() *TmuxRunner {
 func (t *TmuxRunner) CreateSession(tmuxName, cwd, startCmd string) error {
 	args := []string{"new-session", "-d", "-s", tmuxName, "-c", cwd}
 	if startCmd != "" {
-		args = append(args, startCmd)
+		args = append(args, "--", startCmd)
 	}
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
@@ -57,7 +57,7 @@ func (t *TmuxRunner) SendKeys(tmuxName, text string) error {
 
 // SendRawKeys sends raw key tokens to the tmux session (no implicit Enter).
 func (t *TmuxRunner) SendRawKeys(tmuxName string, keys []string) error {
-	args := []string{"send-keys", "-t", tmuxName}
+	args := []string{"send-keys", "-t", tmuxName, "--"}
 	args = append(args, keys...)
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()

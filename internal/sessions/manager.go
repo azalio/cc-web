@@ -8,12 +8,16 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/user/cc-web/internal/config"
 )
+
+// safeIDPattern matches session IDs that are safe for URLs and HTML.
+var safeIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // ErrNotFound is returned when a session ID does not exist.
 var ErrNotFound = errors.New("session not found")
@@ -92,6 +96,11 @@ func (m *Manager) Recover() error {
 		if !strings.HasPrefix(name, m.cfg.TmuxPrefix) {
 			continue
 		}
+		// Validate that the tmux name is safe for use as an ID
+		if !safeIDPattern.MatchString(name) {
+			log.Printf("sessions: skipping recovered tmux session with unsafe name: %q", name)
+			continue
+		}
 		found := false
 		for _, s := range m.sessions {
 			if s.TmuxName == name {
@@ -101,9 +110,17 @@ func (m *Manager) Recover() error {
 		}
 		if !found {
 			id := name
-			port, err := m.ttyd.AllocatePort()
-			if err == nil {
-				_ = m.ttyd.Start(name, port)
+			var port int
+			var terminalURL string
+			if m.ttyd.Available() {
+				if p, err := m.ttyd.AllocatePort(); err == nil {
+					if startErr := m.ttyd.Start(name, p); startErr == nil {
+						port = p
+						terminalURL = fmt.Sprintf("/t/%s/", id)
+					} else {
+						m.ttyd.ReleasePort(p)
+					}
+				}
 			}
 			m.sessions[id] = &Session{
 				ID:          id,
@@ -113,7 +130,7 @@ func (m *Manager) Recover() error {
 				Status:      StatusRunning,
 				CreatedAt:   time.Now(),
 				LastSeenAt:  time.Now(),
-				TerminalURL: fmt.Sprintf("/t/%s/", id),
+				TerminalURL: terminalURL,
 			}
 		}
 	}
@@ -122,6 +139,7 @@ func (m *Manager) Recover() error {
 }
 
 // List returns all sessions with refreshed status.
+// Returns copies so callers cannot observe concurrent mutations.
 func (m *Manager) List() []*Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -135,25 +153,29 @@ func (m *Manager) List() []*Session {
 		} else {
 			s.Status = StatusExited
 		}
-		result = append(result, s)
+		copy := *s
+		result = append(result, &copy)
 	}
 	return result
 }
 
 // Get returns a session by ID.
+// Returns a copy so callers cannot observe concurrent mutations.
 func (m *Manager) Get(id string) (*Session, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.sessions[id]
-	if ok {
-		if m.tmux.HasSession(s.TmuxName) {
-			s.Status = StatusRunning
-			s.LastSeenAt = time.Now()
-		} else {
-			s.Status = StatusExited
-		}
+	if !ok {
+		return nil, false
 	}
-	return s, ok
+	if m.tmux.HasSession(s.TmuxName) {
+		s.Status = StatusRunning
+		s.LastSeenAt = time.Now()
+	} else {
+		s.Status = StatusExited
+	}
+	copy := *s
+	return &copy, true
 }
 
 type CreateRequest struct {
@@ -196,22 +218,27 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	tmuxName := fmt.Sprintf("%s%s-%s-%s", m.cfg.TmuxPrefix, now.Format("20060102-1504"), sanitizeName(req.Name), suffix)
 	id := tmuxName
 
-	// Allocate ttyd port
-	port, err := m.ttyd.AllocatePort()
-	if err != nil {
-		return nil, fmt.Errorf("allocate port: %w", err)
-	}
-
 	// Create tmux session
 	if err := m.tmux.CreateSession(tmuxName, req.CWD, req.StartCmd); err != nil {
 		return nil, fmt.Errorf("create tmux session: %w", err)
 	}
 
-	// Start ttyd
-	if err := m.ttyd.Start(tmuxName, port); err != nil {
-		// Clean up tmux on ttyd failure
-		_ = m.tmux.KillSession(tmuxName)
-		return nil, fmt.Errorf("start ttyd: %w", err)
+	// Allocate ttyd port only when ttyd is available
+	var port int
+	var terminalURL string
+	if m.ttyd.Available() {
+		p, err := m.ttyd.AllocatePort()
+		if err != nil {
+			_ = m.tmux.KillSession(tmuxName)
+			return nil, fmt.Errorf("allocate port: %w", err)
+		}
+		if err := m.ttyd.Start(tmuxName, p); err != nil {
+			m.ttyd.ReleasePort(p)
+			_ = m.tmux.KillSession(tmuxName)
+			return nil, fmt.Errorf("start ttyd: %w", err)
+		}
+		port = p
+		terminalURL = fmt.Sprintf("/t/%s/", id)
 	}
 
 	s := &Session{
@@ -224,7 +251,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		TmuxName:    tmuxName,
 		TtydPort:    port,
 		Status:      StatusRunning,
-		TerminalURL: fmt.Sprintf("/t/%s/", id),
+		TerminalURL: terminalURL,
 	}
 
 	m.sessions[id] = s

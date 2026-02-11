@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -54,7 +55,10 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		token := r.Header.Get("Authorization")
 		token = strings.TrimPrefix(token, "Bearer ")
 		if token == "" {
-			token = r.URL.Query().Get("token")
+			// Fall back to cookie (avoid query param on API routes — tokens leak via logs/referrers)
+			if c, err := r.Cookie("auth_token"); err == nil {
+				token = c.Value
+			}
 		}
 		if !tokenMatch(token, s.cfg.AuthToken) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -324,10 +328,12 @@ func writeCreateError(w http.ResponseWriter, err error) {
 }
 
 // writeSessionError maps session manager errors to appropriate HTTP status codes.
+// Internal errors are logged but not exposed to clients.
 func writeSessionError(w http.ResponseWriter, err error) {
 	if sessions.IsNotFound(err) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	} else {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("session error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 }

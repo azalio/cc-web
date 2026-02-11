@@ -21,6 +21,7 @@ go.work.sum
 # Runtime data
 sessions.json
 .env
+configs/config.local.yaml
 
 # Editor/IDE
 .idea/

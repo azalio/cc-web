@@ -17,6 +17,10 @@ elif [[ -f /etc/debian_version ]]; then
 elif [[ -f /etc/redhat-release ]]; then
   echo "Installing ttyd from GitHub releases..."
   TTYD_VERSION=$(curl -s https://api.github.com/repos/tsl0922/ttyd/releases/latest | grep tag_name | cut -d '"' -f 4)
+  if [[ -z "$TTYD_VERSION" ]]; then
+    echo "Failed to determine latest ttyd version (GitHub API may be unavailable)"
+    exit 1
+  fi
 
   # Map architecture names
   ARCH=$(uname -m)

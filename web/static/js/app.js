@@ -107,11 +107,16 @@
     showView('login');
   }
 
+  function setAuthCookie(token) {
+    const encoded = encodeURIComponent(token);
+    const secure = location.protocol === 'https:' ? ';Secure' : '';
+    document.cookie = `auth_token=${encoded};path=/;SameSite=Strict${secure}`;
+  }
+
   function login(token) {
     authToken = token;
     localStorage.setItem('cc_auth_token', token);
-    // Set cookie for iframe auth
-    document.cookie = `auth_token=${token};path=/;SameSite=Strict;Secure`;
+    setAuthCookie(token);
     showView('sessions');
     refreshSessions();
   }
@@ -163,7 +168,6 @@
     }
 
     list.innerHTML = filtered.map(s => {
-      const safeId = escapeHtml(s.id);
       const safeAttrId = escapeAttr(s.id);
       return `
       <div class="session-card" data-id="${safeAttrId}">
@@ -196,8 +200,12 @@
 
     // Load terminal iframe (auth via cookie, not URL query param)
     const container = $('#terminal-container');
-    if (session && session.terminal_url) {
-      container.innerHTML = `<iframe src="${session.terminal_url}" allow="fullscreen"></iframe>`;
+    container.innerHTML = '';
+    if (session && session.terminal_url && isSafeTerminalUrl(session.terminal_url)) {
+      const iframe = document.createElement('iframe');
+      iframe.src = session.terminal_url;
+      iframe.allow = 'fullscreen';
+      container.appendChild(iframe);
     } else {
       container.innerHTML = `
         <div class="terminal-placeholder">
@@ -342,6 +350,11 @@
     return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  function isSafeTerminalUrl(url) {
+    // Only allow same-origin relative paths starting with /t/
+    return typeof url === 'string' && /^\/t\/[a-zA-Z0-9._-]+\/$/.test(url);
+  }
+
   // --- Init ---
   function init() {
     // Login form
@@ -421,8 +434,7 @@
     // Check if already logged in
     if (authToken) {
       showView('sessions');
-      // Set cookie for iframe auth
-      document.cookie = `auth_token=${authToken};path=/;SameSite=Strict`;
+      setAuthCookie(authToken);
       refreshSessions();
     } else {
       showView('login');

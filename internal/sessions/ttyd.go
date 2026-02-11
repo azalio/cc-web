@@ -54,6 +54,13 @@ func (t *TtydManager) AllocatePort() (int, error) {
 	return 0, fmt.Errorf("no available ports in range %d-%d", t.cfg.TtydBasePort, t.cfg.TtydMaxPort)
 }
 
+// ReleasePort returns a port to the pool (e.g., on create failure).
+func (t *TtydManager) ReleasePort(port int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.usedPorts, port)
+}
+
 // Start launches a ttyd process that attaches to the given tmux session.
 func (t *TtydManager) Start(tmuxName string, port int) error {
 	t.mu.Lock()
@@ -65,23 +72,25 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 		return nil
 	}
 
-	// Stop existing if any
+	// Kill existing if any (don't Wait — monitor goroutine handles reaping)
 	if cmd, ok := t.processes[tmuxName]; ok {
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
 		}
-		// Release old port
+		// Unregister old entry so the old monitor goroutine becomes a no-op
+		delete(t.processes, tmuxName)
 		if oldPort, ok := t.portMap[tmuxName]; ok {
 			delete(t.usedPorts, oldPort)
+			delete(t.portMap, tmuxName)
 		}
 	}
 
+	// tmuxName already contains the TmuxPrefix — use it directly in base-path
 	cmd := exec.Command(t.ttydPath,
 		"--port", fmt.Sprintf("%d", port),
 		"--interface", "127.0.0.1",
 		"--writable",
-		"--base-path", fmt.Sprintf("/t/%s%s/", t.cfg.TmuxPrefix, tmuxName),
+		"--base-path", fmt.Sprintf("/t/%s/", tmuxName),
 		"tmux", "attach-session", "-t", tmuxName,
 	)
 
@@ -93,10 +102,11 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 	t.usedPorts[port] = true
 	t.portMap[tmuxName] = port
 
-	// Monitor process in background — guard cleanup against stale entries
+	// Monitor process in background — only place that calls Wait on this cmd
 	go func() {
 		_ = cmd.Wait()
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		// Only clean up if this is still the registered process (not replaced)
 		if current, ok := t.processes[tmuxName]; ok && current == cmd {
 			delete(t.processes, tmuxName)
@@ -105,13 +115,13 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 				delete(t.portMap, tmuxName)
 			}
 		}
-		t.mu.Unlock()
 	}()
 
 	return nil
 }
 
-// Stop kills the ttyd process for a tmux session and releases its port.
+// Stop kills the ttyd process for a tmux session.
+// Port release is handled by the monitor goroutine.
 func (t *TtydManager) Stop(tmuxName string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -119,8 +129,8 @@ func (t *TtydManager) Stop(tmuxName string) {
 	if cmd, ok := t.processes[tmuxName]; ok {
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
 		}
+		// Unregister immediately so monitor goroutine becomes a no-op
 		delete(t.processes, tmuxName)
 	}
 	if port, ok := t.portMap[tmuxName]; ok {
@@ -137,7 +147,6 @@ func (t *TtydManager) StopAll() {
 	for name, cmd := range t.processes {
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
 		}
 		delete(t.processes, name)
 	}

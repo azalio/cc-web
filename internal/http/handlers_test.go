@@ -161,16 +161,32 @@ func TestHealthz_NoAuth(t *testing.T) {
 	}
 }
 
-func TestTokenInQueryParam(t *testing.T) {
+func TestTokenInCookie(t *testing.T) {
 	cfg := testConfig()
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
-	req := httptest.NewRequest("GET", "/api/sessions?token=test-token", nil)
+	req := httptest.NewRequest("GET", "/api/sessions", nil)
+	req.AddCookie(&http.Cookie{Name: "auth_token", Value: "test-token"})
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestQueryParamRejectedOnAPI(t *testing.T) {
+	cfg := testConfig()
+	mgr := sessions.NewManager(cfg)
+	srv := NewServer(cfg, mgr)
+
+	// Query param should NOT work on API routes (only on /t/ terminal)
+	req := httptest.NewRequest("GET", "/api/sessions?token=test-token", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (query param should be rejected on API)", w.Code, http.StatusUnauthorized)
 	}
 }
