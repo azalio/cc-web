@@ -10,7 +10,6 @@ import (
 
 type Config struct {
 	ListenAddr      string   `yaml:"listen_addr"`
-	BaseURL         string   `yaml:"base_url"`
 	ProjectsAllowed []string `yaml:"projects_allowed"`
 	TmuxPrefix      string   `yaml:"tmux_prefix"`
 	TtydPath        string   `yaml:"ttyd_path"`

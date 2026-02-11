@@ -5,7 +5,8 @@
 #
 # Prerequisites:
 #   - A domain managed by Cloudflare DNS
-#   - macOS with Homebrew, or Linux with apt/yum
+#   - macOS with Homebrew, or Debian/Ubuntu Linux with apt
+#   - python3 (for parsing cloudflared JSON output)
 #
 # Usage: ./scripts/setup-cloudflare-tunnel.sh <your-domain>
 # Example: ./scripts/setup-cloudflare-tunnel.sh example.com
@@ -70,9 +71,20 @@ else
             exit 1
         fi
     elif [[ -f /etc/debian_version ]]; then
+        # Determine codename; lsb_release may be absent on minimal installs
+        local codename
+        if command -v lsb_release &>/dev/null; then
+            codename=$(lsb_release -cs)
+        elif [[ -f /etc/os-release ]]; then
+            codename=$(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}")
+        fi
+        if [[ -z "$codename" ]]; then
+            err "Cannot determine Debian/Ubuntu codename. Install lsb-release or check /etc/os-release."
+            exit 1
+        fi
         curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
             | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-        echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" \
+        echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared ${codename} main" \
             | sudo tee /etc/apt/sources.list.d/cloudflared.list
         sudo apt-get update && sudo apt-get install -y cloudflared
     else
@@ -162,8 +174,12 @@ ok "Config written: ${CLOUDFLARED_CONFIG}"
 # --- Step 6: Route DNS ---
 info "Step 6: Setting up DNS route..."
 
-cloudflared tunnel route dns "$TUNNEL_NAME" "$HOSTNAME" 2>&1 || true
-ok "DNS CNAME: ${HOSTNAME} -> ${TUNNEL_NAME}.cfargotunnel.com"
+if cloudflared tunnel route dns "$TUNNEL_NAME" "$HOSTNAME" 2>&1; then
+    ok "DNS CNAME: ${HOSTNAME} -> ${TUNNEL_NAME}.cfargotunnel.com"
+else
+    warn "DNS route command failed. The CNAME may already exist, or you may need to add it manually."
+    warn "Expected: CNAME ${HOSTNAME} -> ${TUNNEL_ID}.cfargotunnel.com"
+fi
 
 # --- Step 7: Validate ---
 info "Step 7: Validating tunnel config..."

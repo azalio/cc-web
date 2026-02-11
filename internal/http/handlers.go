@@ -1,6 +1,7 @@
 package http
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -315,8 +316,12 @@ func readJSON(r *http.Request, v interface{}) error {
 }
 
 // tokenMatch performs constant-time comparison to prevent timing attacks.
+// Hashes both values first so the comparison is length-independent
+// (subtle.ConstantTimeCompare returns early on length mismatch).
 func tokenMatch(provided, expected string) bool {
-	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+	ph := sha256.Sum256([]byte(provided))
+	eh := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(ph[:], eh[:]) == 1
 }
 
 // writeCreateError maps session creation errors to appropriate HTTP status codes.

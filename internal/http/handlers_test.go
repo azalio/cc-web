@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,7 +12,8 @@ import (
 	"github.com/user/cc-web/internal/sessions"
 )
 
-func testConfig() *config.Config {
+func testConfig(t *testing.T) *config.Config {
+	t.Helper()
 	return &config.Config{
 		ListenAddr:      "127.0.0.1:8787",
 		AuthToken:       "test-token",
@@ -20,12 +22,12 @@ func testConfig() *config.Config {
 		TtydMaxPort:     19010,
 		MaxSessions:     10,
 		ProjectsAllowed: []string{"/tmp"},
-		SessionsFile:    "/tmp/test-sessions.json",
+		SessionsFile:    filepath.Join(t.TempDir(), "sessions.json"),
 	}
 }
 
 func TestListSessions_Unauthorized(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -39,7 +41,7 @@ func TestListSessions_Unauthorized(t *testing.T) {
 }
 
 func TestListSessions_Authorized(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -62,7 +64,7 @@ func TestListSessions_Authorized(t *testing.T) {
 }
 
 func TestCreateSession_BadCwd(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -85,7 +87,7 @@ func TestCreateSession_BadCwd(t *testing.T) {
 }
 
 func TestCreateSession_MissingName(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -102,7 +104,7 @@ func TestCreateSession_MissingName(t *testing.T) {
 }
 
 func TestSendText_NotFound(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -119,7 +121,7 @@ func TestSendText_NotFound(t *testing.T) {
 }
 
 func TestInterrupt_NotFound(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -134,7 +136,7 @@ func TestInterrupt_NotFound(t *testing.T) {
 }
 
 func TestHealthz_NoAuth(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -162,7 +164,7 @@ func TestHealthz_NoAuth(t *testing.T) {
 }
 
 func TestTokenInCookie(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 
@@ -177,7 +179,7 @@ func TestTokenInCookie(t *testing.T) {
 }
 
 func TestQueryParamRejectedOnAPI(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	mgr := sessions.NewManager(cfg)
 	srv := NewServer(cfg, mgr)
 

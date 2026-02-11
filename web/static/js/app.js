@@ -110,9 +110,10 @@
   }
 
   function setAuthCookie(token) {
-    const encoded = encodeURIComponent(token);
+    // Don't URL-encode: Go's http.Cookie reads the raw value, so encoding
+    // would cause a mismatch during server-side token comparison.
     const secure = location.protocol === 'https:' ? ';Secure' : '';
-    document.cookie = `auth_token=${encoded};path=/;SameSite=Strict${secure}`;
+    document.cookie = `auth_token=${token};path=/;SameSite=Strict${secure}`;
   }
 
   function login(token) {

@@ -140,16 +140,37 @@ func (m *Manager) Recover() error {
 
 // List returns all sessions with refreshed status.
 // Returns copies so callers cannot observe concurrent mutations.
+// Snapshots tmux names under lock, checks tmux outside the lock to avoid
+// blocking other operations behind slow shell invocations.
 func (m *Manager) List() []*Session {
+	// Snapshot IDs and tmux names under read lock
+	m.mu.RLock()
+	type entry struct {
+		id       string
+		tmuxName string
+	}
+	entries := make([]entry, 0, len(m.sessions))
+	for id, s := range m.sessions {
+		entries = append(entries, entry{id: id, tmuxName: s.TmuxName})
+	}
+	m.mu.RUnlock()
+
+	// Check tmux status without holding the lock
+	alive := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		alive[e.id] = m.tmux.HasSession(e.tmuxName)
+	}
+
+	// Re-lock to update status and build result
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	now := time.Now()
 	result := make([]*Session, 0, len(m.sessions))
-	for _, s := range m.sessions {
-		// Refresh status
-		if m.tmux.HasSession(s.TmuxName) {
+	for id, s := range m.sessions {
+		if alive[id] {
 			s.Status = StatusRunning
-			s.LastSeenAt = time.Now()
+			s.LastSeenAt = now
 		} else {
 			s.Status = StatusExited
 		}
@@ -162,13 +183,27 @@ func (m *Manager) List() []*Session {
 // Get returns a session by ID.
 // Returns a copy so callers cannot observe concurrent mutations.
 func (m *Manager) Get(id string) (*Session, bool) {
+	// Read tmux name under read lock
+	m.mu.RLock()
+	s, ok := m.sessions[id]
+	if !ok {
+		m.mu.RUnlock()
+		return nil, false
+	}
+	tmuxName := s.TmuxName
+	m.mu.RUnlock()
+
+	// Check tmux without holding the lock
+	isAlive := m.tmux.HasSession(tmuxName)
+
+	// Re-lock to update and copy
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s, ok := m.sessions[id]
+	s, ok = m.sessions[id]
 	if !ok {
 		return nil, false
 	}
-	if m.tmux.HasSession(s.TmuxName) {
+	if isAlive {
 		s.Status = StatusRunning
 		s.LastSeenAt = time.Now()
 	} else {
@@ -186,6 +221,18 @@ type CreateRequest struct {
 
 // Create creates a new session.
 func (m *Manager) Create(req CreateRequest) (*Session, error) {
+	// Validate inputs outside the lock — no shared state needed
+	if !m.cfg.IsPathAllowed(req.CWD) {
+		return nil, fmt.Errorf("path %q is not in allowed list", req.CWD)
+	}
+	info, err := os.Stat(req.CWD)
+	if err != nil || !info.IsDir() {
+		return nil, fmt.Errorf("path %q does not exist or is not a directory", req.CWD)
+	}
+	if req.StartCmd == "" {
+		req.StartCmd = "claude"
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -199,24 +246,15 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return nil, fmt.Errorf("max active sessions (%d) reached", m.cfg.MaxSessions)
 	}
 
-	if !m.cfg.IsPathAllowed(req.CWD) {
-		return nil, fmt.Errorf("path %q is not in allowed list", req.CWD)
-	}
-
-	// Verify directory exists
-	info, err := os.Stat(req.CWD)
-	if err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("path %q does not exist or is not a directory", req.CWD)
-	}
-
-	if req.StartCmd == "" {
-		req.StartCmd = "claude"
-	}
-
 	now := time.Now()
 	suffix := randomSuffix()
 	tmuxName := fmt.Sprintf("%s%s-%s-%s", m.cfg.TmuxPrefix, now.Format("20060102-1504"), sanitizeName(req.Name), suffix)
 	id := tmuxName
+
+	// Sanity check: generated ID must match safe pattern
+	if !safeIDPattern.MatchString(id) {
+		return nil, fmt.Errorf("generated session ID %q is not safe; check tmux_prefix in config", id)
+	}
 
 	// Create tmux session
 	if err := m.tmux.CreateSession(tmuxName, req.CWD, req.StartCmd); err != nil {
@@ -357,6 +395,9 @@ func (m *Manager) loadFromFile() {
 	if err := json.Unmarshal(data, &sessions); err != nil {
 		log.Printf("sessions: corrupt sessions file: %v", err)
 		return
+	}
+	if sessions == nil {
+		sessions = make(map[string]*Session)
 	}
 	m.sessions = sessions
 }

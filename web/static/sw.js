@@ -20,6 +20,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   // Network-first: try network, fall back to cache for app shell
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request).catch(() =>
+      caches.match(e.request).then((r) => r || new Response('Offline', { status: 503 }))
+    )
   );
 });

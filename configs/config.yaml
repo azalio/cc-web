@@ -1,6 +1,5 @@
 # Claude Code Mobile Web Terminal - Configuration
 listen_addr: "127.0.0.1:8787"
-base_url: "http://127.0.0.1:8787"
 
 # Directories where sessions can be created
 projects_allowed:
