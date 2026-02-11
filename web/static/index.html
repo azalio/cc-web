@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=overlays-content">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#1a1a2e">
   <title>Claude Code Mobile</title>
   <link rel="manifest" href="/manifest.json">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=9">
 </head>
 <body>
   <div class="toast-container" id="toast-container"></div>
@@ -62,17 +62,21 @@
     </div>
 
     <!-- Keys Bar -->
-    <div class="keys-bar">
-      <button class="key-btn" data-key="ESC">Esc</button>
-      <button class="key-btn" data-key="TAB">Tab</button>
-      <button class="key-btn" data-key="UP">&uarr;</button>
-      <button class="key-btn" data-key="DOWN">&darr;</button>
-      <button class="key-btn" data-key="LEFT">&larr;</button>
-      <button class="key-btn" data-key="RIGHT">&rarr;</button>
-      <button class="key-btn" data-key="CTRL_C">^C</button>
-      <button class="key-btn" data-key="CTRL_D">^D</button>
-      <button class="key-btn" data-key="ENTER">&crarr;</button>
-      <button class="key-btn intervene-btn" id="intervene-open">Intervene</button>
+    <div class="keys-bar" id="keys-bar">
+      <div class="input-buffer" id="input-buffer" style="display:none">
+        <input type="text" id="buffer-input" placeholder="Type or tap keys..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button class="buffer-send" id="buffer-send">Send</button>
+        <button class="buffer-clear" id="buffer-clear">&times;</button>
+      </div>
+      <div class="key-row">
+        <button class="key-btn arrow" data-key="LEFT">&larr;</button>
+        <button class="key-btn arrow" data-key="DOWN">&darr;</button>
+        <button class="key-btn arrow" data-key="UP">&uarr;</button>
+        <button class="key-btn arrow" data-key="RIGHT">&rarr;</button>
+        <button class="key-btn" data-key="CTRL_C">^C</button>
+        <button class="key-btn intervene-btn" id="intervene-open">Intervene</button>
+        <button class="key-btn enter-btn" data-key="ENTER">&crarr;</button>
+      </div>
     </div>
   </div>
 
@@ -130,7 +134,7 @@
     </div>
   </div>
 
-  <script src="/js/app.js"></script>
+  <script src="/js/app.js?v=9"></script>
   <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
 </body>
 </html>

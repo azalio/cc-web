@@ -133,6 +133,12 @@
     $('#sessions-screen').style.display = view === 'sessions' ? 'flex' : 'none';
     $('#session-screen').style.display = view === 'session' ? 'flex' : 'none';
 
+    // Clear inline viewport height when leaving session view
+    if (view !== 'session') {
+      const sessionScreen = $('#session-screen');
+      if (sessionScreen) sessionScreen.style.height = '';
+    }
+
     // Show/hide back button
     if ($('#back-btn')) {
       $('#back-btn').style.display = view === 'session' ? 'block' : 'none';
@@ -253,6 +259,101 @@
     } catch (e) {
       toast(e.message, 'error');
     }
+  }
+
+  // --- Extra Keys: character mappings and key repeat ---
+  const CHAR_KEYS = {
+    'PIPE': '|', 'TILDE': '~', 'DASH': '-', 'SLASH': '/',
+    'BACKSLASH': '\\', 'BACKTICK': '`',
+  };
+
+  function haptic() {
+    if (navigator.vibrate) navigator.vibrate(8);
+  }
+
+  // --- Input Buffer ---
+  function showInputBuffer() {
+    const buf = $('#input-buffer');
+    if (buf) buf.style.display = 'flex';
+  }
+
+  function hideInputBuffer() {
+    const buf = $('#input-buffer');
+    const input = $('#buffer-input');
+    if (buf) buf.style.display = 'none';
+    if (input) input.value = '';
+  }
+
+  function appendToBuffer(char) {
+    const input = $('#buffer-input');
+    if (!input) return;
+    showInputBuffer();
+    input.value += char;
+    input.focus();
+  }
+
+  async function sendBuffer() {
+    const input = $('#buffer-input');
+    if (!input || !input.value) return;
+    const text = input.value;
+    hideInputBuffer();
+    if (!currentSessionId) return;
+    try {
+      await api.sendText(currentSessionId, text);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  function handleExtraKey(keyName) {
+    haptic();
+
+    // Character keys: append to input buffer
+    if (CHAR_KEYS[keyName]) {
+      appendToBuffer(CHAR_KEYS[keyName]);
+      return;
+    }
+
+    // ENTER: if buffer has content, send buffer; otherwise send Enter key
+    if (keyName === 'ENTER') {
+      const input = $('#buffer-input');
+      if (input && input.value) {
+        sendBuffer();
+        return;
+      }
+    }
+
+    // Special keys: send via tmux keys API
+    sendKeyAction([keyName]);
+  }
+
+  // Key repeat for arrows (with in-flight guard to prevent request pileup)
+  let repeatTimer = null;
+  let repeatInterval = null;
+  let repeatInFlight = false;
+
+  function startKeyRepeat(keyName) {
+    stopKeyRepeat(); // Clean up any existing timers first
+    handleExtraKey(keyName);
+    repeatTimer = setTimeout(() => {
+      repeatInterval = setInterval(async () => {
+        if (repeatInFlight) return; // Skip if previous request still pending
+        repeatInFlight = true;
+        try {
+          await sendKeyAction([keyName]);
+        } finally {
+          repeatInFlight = false;
+        }
+      }, 80);
+    }, 400);
+  }
+
+  function stopKeyRepeat() {
+    clearTimeout(repeatTimer);
+    clearInterval(repeatInterval);
+    repeatTimer = null;
+    repeatInterval = null;
+    repeatInFlight = false;
   }
 
   async function sendKeyAction(keys) {
@@ -401,12 +502,55 @@
       if (currentSessionId) interruptSession(currentSessionId);
     });
 
-    // Keys bar
-    $$('.key-btn[data-key]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    // Keys bar — use touchstart to prevent focus loss from terminal iframe
+    const keysBar = $('#keys-bar');
+    if (keysBar) {
+      keysBar.addEventListener('touchstart', (e) => {
+        // Ignore taps on input buffer elements
+        if (e.target.closest('.input-buffer')) return;
+        const btn = e.target.closest('.key-btn[data-key]');
+        if (!btn || btn.id === 'intervene-open') return;
+        e.preventDefault(); // Keep terminal focused
         const key = btn.dataset.key;
-        sendKeyAction([key]);
+        if (btn.classList.contains('arrow')) {
+          startKeyRepeat(key);
+        } else {
+          handleExtraKey(key);
+        }
+      }, { passive: false });
+
+      keysBar.addEventListener('touchend', (e) => {
+        if (repeatTimer || repeatInterval) {
+          stopKeyRepeat();
+        }
       });
+
+      keysBar.addEventListener('touchcancel', () => {
+        stopKeyRepeat();
+      });
+
+      // Fallback for non-touch (desktop testing)
+      $$('.key-btn[data-key]').forEach(btn => {
+        if (btn.id === 'intervene-open') return;
+        btn.addEventListener('click', (e) => {
+          // Skip if touch already handled
+          if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
+          handleExtraKey(btn.dataset.key);
+        });
+      });
+    }
+
+    // Buffer send/clear buttons
+    $('#buffer-send').addEventListener('click', sendBuffer);
+    $('#buffer-clear').addEventListener('click', hideInputBuffer);
+    $('#buffer-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendBuffer();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideInputBuffer();
+      }
     });
 
     // Intervene button
@@ -433,6 +577,38 @@
         refreshSessions();
       }
     }, 5000);
+
+    // --- VisualViewport: resize app when soft keyboard opens ---
+    function setupViewportTracking() {
+      if (!window.visualViewport) return;
+
+      function onViewportChange() {
+        // Adjust session view height to visible viewport
+        const vh = window.visualViewport.height;
+        const sessionScreen = $('#session-screen');
+        if (sessionScreen && currentView === 'session') {
+          sessionScreen.style.height = vh + 'px';
+        }
+      }
+
+      window.visualViewport.addEventListener('resize', onViewportChange);
+      window.visualViewport.addEventListener('scroll', onViewportChange);
+    }
+
+    setupViewportTracking();
+
+    // Prevent iOS rubber-band scroll on the session view
+    document.addEventListener('touchmove', (e) => {
+      if (currentView === 'session') {
+        const target = e.target;
+        // Allow scroll inside bottom sheet and sessions list
+        if (target.closest('.bottom-sheet') || target.closest('.sessions-view')) return;
+        // Prevent bounce scroll on terminal view
+        if (target.closest('.session-view')) {
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
 
     // Check if already logged in
     if (authToken) {
