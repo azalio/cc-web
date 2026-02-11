@@ -30,7 +30,11 @@ sudo apt-get install ttyd
 
 ## Quick Start
 
-1. **Configure** — Edit `configs/config.yaml`:
+1. **Configure** — Copy the example config and set a real auth token:
+   ```bash
+   cp configs/config.yaml configs/config.local.yaml
+   ```
+   Edit `configs/config.local.yaml`:
    ```yaml
    auth_token: "your-secure-token-here"
    projects_allowed:
@@ -42,14 +46,15 @@ sudo apt-get install ttyd
    ```bash
    make run
    # or
-   go build -o cc-web ./cmd/gateway && ./cc-web -config configs/config.yaml
+   go build -o cc-web ./cmd/gateway && ./cc-web -config configs/config.local.yaml
    ```
 
 3. **Open on your phone**: Navigate to `http://<your-ip>:8787` and enter your token.
 
 ## API
 
-All API endpoints require `Authorization: Bearer <token>` header (or `?token=<token>` query param).
+API endpoints (`/api/...`) require `Authorization: Bearer <token>` header or `auth_token` cookie.
+Terminal proxy (`/t/...`) also accepts the `auth_token` cookie set by the PWA on login.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -131,8 +136,7 @@ launchctl load ~/Library/LaunchAgents/com.claude-gateway.plist
 cmd/gateway/          # Main server binary
 internal/
   config/             # YAML config loader + path allowlist
-  http/               # HTTP handlers + auth middleware
-  proxy/              # Reverse proxy helpers
+  http/               # HTTP handlers, auth middleware, reverse proxy
   sessions/           # Session manager, tmux runner, ttyd manager
 web/static/           # PWA frontend (HTML/CSS/JS)
 scripts/              # Install and run helpers

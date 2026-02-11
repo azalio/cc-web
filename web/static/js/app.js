@@ -104,6 +104,8 @@
   function logout() {
     authToken = '';
     localStorage.removeItem('cc_auth_token');
+    // Clear auth cookie (set expired)
+    document.cookie = 'auth_token=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT';
     showView('login');
   }
 

@@ -37,6 +37,12 @@ if [ -z "$DOMAIN" ]; then
     exit 1
 fi
 
+if ! command -v python3 &>/dev/null; then
+    err "python3 is required to parse cloudflared JSON output."
+    err "Install it: sudo apt-get install python3 (or brew install python3)"
+    exit 1
+fi
+
 HOSTNAME="${SUBDOMAIN}.${DOMAIN}"
 
 echo ""

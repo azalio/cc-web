@@ -43,17 +43,27 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/sessions", s.authMiddleware(s.handleSessions))
 	s.mux.HandleFunc("/api/sessions/", s.authMiddleware(s.handleSessionAction))
 
-	// Terminal proxy (auth via query param for WebSocket/iframe)
+	// Terminal proxy (auth via cookie for WebSocket/iframe)
 	s.mux.HandleFunc("/t/", s.authTerminal(s.handleTerminalProxy))
 
 	// Static files (no auth - the PWA itself)
 	s.mux.Handle("/", http.FileServer(http.Dir("web/static")))
 }
 
+// extractBearerToken extracts the token from the Authorization header.
+// Handles "Bearer" prefix case-insensitively per RFC 7235.
+func extractBearerToken(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	// RFC 7235: scheme is case-insensitive
+	if len(auth) > 7 && strings.EqualFold(auth[:7], "Bearer ") {
+		return auth[7:]
+	}
+	return ""
+}
+
 func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
-		token = strings.TrimPrefix(token, "Bearer ")
+		token := extractBearerToken(r)
 		if token == "" {
 			// Fall back to cookie (avoid query param on API routes — tokens leak via logs/referrers)
 			if c, err := r.Cookie("auth_token"); err == nil {
@@ -70,14 +80,9 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) authTerminal(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check bearer header first, then query param (for iframe/WebSocket)
-		token := r.Header.Get("Authorization")
-		token = strings.TrimPrefix(token, "Bearer ")
+		// Check bearer header first, then cookie (for iframe/WebSocket)
+		token := extractBearerToken(r)
 		if token == "" {
-			token = r.URL.Query().Get("token")
-		}
-		if token == "" {
-			// Check cookie as fallback for iframe
 			if c, err := r.Cookie("auth_token"); err == nil {
 				token = c.Value
 			}
@@ -323,7 +328,8 @@ func writeCreateError(w http.ResponseWriter, err error) {
 		strings.Contains(msg, "max active sessions") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
 	} else {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg})
+		log.Printf("create session error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 }
 

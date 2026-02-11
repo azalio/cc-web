@@ -120,8 +120,8 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 	return nil
 }
 
-// Stop kills the ttyd process for a tmux session.
-// Port release is handled by the monitor goroutine.
+// Stop kills the ttyd process for a tmux session and releases its port.
+// Unregisters immediately so the monitor goroutine's cleanup becomes a no-op.
 func (t *TtydManager) Stop(tmuxName string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

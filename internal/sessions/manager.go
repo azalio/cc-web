@@ -270,7 +270,9 @@ func (m *Manager) Kill(id string) error {
 	}
 
 	m.ttyd.Stop(s.TmuxName)
-	_ = m.tmux.KillSession(s.TmuxName)
+	if err := m.tmux.KillSession(s.TmuxName); err != nil {
+		log.Printf("sessions: kill tmux %q: %v", s.TmuxName, err)
+	}
 	delete(m.sessions, id)
 	m.saveToFile()
 	return nil
