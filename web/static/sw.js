@@ -1,6 +1,6 @@
 // Minimal service worker for PWA installability.
 // Caches the app shell for offline fallback.
-const CACHE_NAME = 'cc-mobile-v7';
+const CACHE_NAME = 'cc-mobile-v8';
 const SHELL_URLS = ['/', '/css/style.css', '/js/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
