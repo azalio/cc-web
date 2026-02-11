@@ -255,12 +255,11 @@
     }
   }
 
-  // --- Extra Keys: mappings, sticky modifiers, key repeat ---
+  // --- Extra Keys: character mappings and key repeat ---
   const CHAR_KEYS = {
-    'PIPE': '|', 'TILDE': '~', 'DASH': '-', 'SLASH': '/', 'UNDERSCORE': '_',
+    'PIPE': '|', 'TILDE': '~', 'DASH': '-', 'SLASH': '/',
+    'BACKSLASH': '\\', 'BACKTICK': '`',
   };
-
-  const modifiers = { ctrl: false };
 
   function haptic() {
     if (navigator.vibrate) navigator.vibrate(8);
@@ -269,35 +268,14 @@
   function handleExtraKey(keyName) {
     haptic();
 
-    // Toggle sticky modifier
-    if (keyName === 'CTRL') {
-      modifiers.ctrl = !modifiers.ctrl;
-      const btn = document.querySelector('.key-btn[data-modifier="ctrl"]');
-      if (btn) btn.classList.toggle('active', modifiers.ctrl);
-      return;
-    }
-
     // Character keys: send as text directly
     if (CHAR_KEYS[keyName]) {
       sendText(CHAR_KEYS[keyName]);
-      resetModifiers();
       return;
     }
 
-    // Ctrl+key combos via the keys API
-    const keysToSend = modifiers.ctrl ? ['CTRL_' + keyName] : [keyName];
-
-    // Special: if Ctrl is active and key is a single char concept, handle it
-    sendKeyAction(keysToSend);
-    resetModifiers();
-  }
-
-  function resetModifiers() {
-    if (modifiers.ctrl) {
-      modifiers.ctrl = false;
-      const btn = document.querySelector('.key-btn[data-modifier="ctrl"]');
-      if (btn) btn.classList.remove('active');
-    }
+    // Special keys: send via tmux keys API
+    sendKeyAction([keyName]);
   }
 
   // Key repeat for arrows
