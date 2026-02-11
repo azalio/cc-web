@@ -380,6 +380,7 @@ button, .btn {
 
 .key-row {
   display: flex;
+  flex-direction: row;
   gap: 3px;
 }
 
@@ -414,7 +415,7 @@ button, .btn {
 }
 
 .key-btn.enter-btn {
-  flex: 2;
+  flex: 3;
   background: #007aff;
   border-color: #005ecb;
   color: #fff;
