@@ -1,5 +1,6 @@
 # Binaries
 cc-web
+gateway
 *.exe
 *.exe~
 *.dll
