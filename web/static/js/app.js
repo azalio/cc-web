@@ -133,6 +133,12 @@
     $('#sessions-screen').style.display = view === 'sessions' ? 'flex' : 'none';
     $('#session-screen').style.display = view === 'session' ? 'flex' : 'none';
 
+    // Clear inline viewport height when leaving session view
+    if (view !== 'session') {
+      const sessionScreen = $('#session-screen');
+      if (sessionScreen) sessionScreen.style.height = '';
+    }
+
     // Show/hide back button
     if ($('#back-btn')) {
       $('#back-btn').style.display = view === 'session' ? 'block' : 'none';
@@ -265,12 +271,22 @@
     if (navigator.vibrate) navigator.vibrate(8);
   }
 
+  // Silent version of sendText for extra-key chars (no toast)
+  async function sendCharSilent(char) {
+    if (!currentSessionId || !char) return;
+    try {
+      await api.sendText(currentSessionId, char);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
   function handleExtraKey(keyName) {
     haptic();
 
-    // Character keys: send as text directly
+    // Character keys: send as text directly (no toast)
     if (CHAR_KEYS[keyName]) {
-      sendText(CHAR_KEYS[keyName]);
+      sendCharSilent(CHAR_KEYS[keyName]);
       return;
     }
 
@@ -278,14 +294,24 @@
     sendKeyAction([keyName]);
   }
 
-  // Key repeat for arrows
+  // Key repeat for arrows (with in-flight guard to prevent request pileup)
   let repeatTimer = null;
   let repeatInterval = null;
+  let repeatInFlight = false;
 
   function startKeyRepeat(keyName) {
+    stopKeyRepeat(); // Clean up any existing timers first
     handleExtraKey(keyName);
     repeatTimer = setTimeout(() => {
-      repeatInterval = setInterval(() => handleExtraKey(keyName), 80);
+      repeatInterval = setInterval(async () => {
+        if (repeatInFlight) return; // Skip if previous request still pending
+        repeatInFlight = true;
+        try {
+          await sendKeyAction([keyName]);
+        } finally {
+          repeatInFlight = false;
+        }
+      }, 80);
     }, 400);
   }
 
@@ -294,6 +320,7 @@
     clearInterval(repeatInterval);
     repeatTimer = null;
     repeatInterval = null;
+    repeatInFlight = false;
   }
 
   async function sendKeyAction(keys) {
