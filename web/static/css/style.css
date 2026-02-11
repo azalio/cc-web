@@ -309,8 +309,8 @@ button, .btn {
 .keys-bar {
   display: flex;
   flex-direction: column;
-  padding: 6px 4px;
-  gap: 4px;
+  padding: 5px 4px;
+  gap: 3px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
@@ -318,7 +318,7 @@ button, .btn {
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .keys-bar {
-    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    padding-bottom: calc(5px + env(safe-area-inset-bottom));
   }
 }
 
@@ -330,8 +330,8 @@ button, .btn {
 .key-btn {
   flex: 1;
   min-width: 0;
-  height: 42px;
-  padding: 0 4px;
+  height: 38px;
+  padding: 0 6px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -583,11 +583,11 @@ button, .btn {
 @media (orientation: landscape) and (max-height: 500px) {
   .header { min-height: 40px; padding: 4px 12px; }
   .header h1 { font-size: 14px; }
-  .keys-bar { padding: 3px 4px; gap: 2px; }
+  .keys-bar { padding: 2px 4px; gap: 2px; }
   .key-row { gap: 2px; }
-  .key-btn { height: 30px; font-size: 11px; }
+  .key-btn { height: 26px; font-size: 11px; }
   .key-btn.arrow { font-size: 14px; }
-  .key-btn.enter-btn { font-size: 13px; }
+  .key-btn.enter-btn { font-size: 12px; }
 }
 
 /* --- Loading spinner --- */
