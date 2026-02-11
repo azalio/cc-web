@@ -63,6 +63,11 @@
 
     <!-- Keys Bar -->
     <div class="keys-bar" id="keys-bar">
+      <div class="input-buffer" id="input-buffer" style="display:none">
+        <input type="text" id="buffer-input" placeholder="Type or tap keys..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button class="buffer-send" id="buffer-send">Send</button>
+        <button class="buffer-clear" id="buffer-clear">&times;</button>
+      </div>
       <div class="key-row">
         <button class="key-btn" data-key="PIPE">|</button>
         <button class="key-btn" data-key="TILDE">~</button>

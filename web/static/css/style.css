@@ -316,6 +316,62 @@ button, .btn {
   flex-shrink: 0;
 }
 
+/* --- Input Buffer --- */
+.input-buffer {
+  display: flex;
+  gap: 4px;
+  padding: 0 0 2px;
+}
+
+.input-buffer input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.input-buffer input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.buffer-send {
+  height: 34px;
+  padding: 0 12px;
+  background: #007aff;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.buffer-send:active {
+  background: #005ecb;
+}
+
+.buffer-clear {
+  height: 34px;
+  width: 34px;
+  padding: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .keys-bar {
     padding-bottom: calc(5px + env(safe-area-inset-bottom));

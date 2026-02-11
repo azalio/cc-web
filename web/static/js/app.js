@@ -271,11 +271,35 @@
     if (navigator.vibrate) navigator.vibrate(8);
   }
 
-  // Silent version of sendText for extra-key chars (no toast)
-  async function sendCharSilent(char) {
-    if (!currentSessionId || !char) return;
+  // --- Input Buffer ---
+  function showInputBuffer() {
+    const buf = $('#input-buffer');
+    if (buf) buf.style.display = 'flex';
+  }
+
+  function hideInputBuffer() {
+    const buf = $('#input-buffer');
+    const input = $('#buffer-input');
+    if (buf) buf.style.display = 'none';
+    if (input) input.value = '';
+  }
+
+  function appendToBuffer(char) {
+    const input = $('#buffer-input');
+    if (!input) return;
+    showInputBuffer();
+    input.value += char;
+    input.focus();
+  }
+
+  async function sendBuffer() {
+    const input = $('#buffer-input');
+    if (!input || !input.value) return;
+    const text = input.value;
+    hideInputBuffer();
+    if (!currentSessionId) return;
     try {
-      await api.sendText(currentSessionId, char);
+      await api.sendText(currentSessionId, text);
     } catch (e) {
       toast(e.message, 'error');
     }
@@ -284,10 +308,19 @@
   function handleExtraKey(keyName) {
     haptic();
 
-    // Character keys: send as text directly (no toast)
+    // Character keys: append to input buffer
     if (CHAR_KEYS[keyName]) {
-      sendCharSilent(CHAR_KEYS[keyName]);
+      appendToBuffer(CHAR_KEYS[keyName]);
       return;
+    }
+
+    // ENTER: if buffer has content, send buffer; otherwise send Enter key
+    if (keyName === 'ENTER') {
+      const input = $('#buffer-input');
+      if (input && input.value) {
+        sendBuffer();
+        return;
+      }
     }
 
     // Special keys: send via tmux keys API
@@ -473,6 +506,8 @@
     const keysBar = $('#keys-bar');
     if (keysBar) {
       keysBar.addEventListener('touchstart', (e) => {
+        // Ignore taps on input buffer elements
+        if (e.target.closest('.input-buffer')) return;
         const btn = e.target.closest('.key-btn[data-key]');
         if (!btn || btn.id === 'intervene-open') return;
         e.preventDefault(); // Keep terminal focused
@@ -504,6 +539,19 @@
         });
       });
     }
+
+    // Buffer send/clear buttons
+    $('#buffer-send').addEventListener('click', sendBuffer);
+    $('#buffer-clear').addEventListener('click', hideInputBuffer);
+    $('#buffer-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendBuffer();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideInputBuffer();
+      }
+    });
 
     // Intervene button
     $('#intervene-open').addEventListener('click', showIntervene);
