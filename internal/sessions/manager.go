@@ -86,7 +86,11 @@ func (m *Manager) Recover() error {
 			m.sessions[id].LastSeenAt = time.Now()
 			// Restart ttyd for recovered running sessions
 			if s.TtydPort > 0 {
-				_ = m.ttyd.Start(s.TmuxName, s.TtydPort)
+				if err := m.ttyd.Start(s.TmuxName, s.TtydPort); err != nil {
+					log.Printf("sessions: failed to restart ttyd for %q: %v", s.TmuxName, err)
+					m.sessions[id].TtydPort = 0
+					m.sessions[id].TerminalURL = ""
+				}
 			}
 		}
 	}
@@ -161,6 +165,12 @@ func (m *Manager) List() []*Session {
 		alive[e.id] = m.tmux.HasSession(e.tmuxName)
 	}
 
+	// Build lookup of IDs that were in the snapshot
+	snapshotIDs := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		snapshotIDs[e.id] = true
+	}
+
 	// Re-lock to update status and build result
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -168,6 +178,12 @@ func (m *Manager) List() []*Session {
 	now := time.Now()
 	result := make([]*Session, 0, len(m.sessions))
 	for id, s := range m.sessions {
+		// Sessions created after the snapshot weren't checked — leave their status as-is
+		if !snapshotIDs[id] {
+			copy := *s
+			result = append(result, &copy)
+			continue
+		}
 		if alive[id] {
 			s.Status = StatusRunning
 			s.LastSeenAt = now

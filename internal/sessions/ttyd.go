@@ -2,8 +2,11 @@ package sessions
 
 import (
 	"fmt"
+	"log"
+	"net"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/user/cc-web/internal/config"
 )
@@ -94,6 +97,12 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 		"tmux", "attach-session", "-t", tmuxName,
 	)
 
+	// Capture ttyd output for debugging
+	cmd.Stdout = &logWriter{prefix: fmt.Sprintf("ttyd[%s]", tmuxName)}
+	cmd.Stderr = &logWriter{prefix: fmt.Sprintf("ttyd[%s]", tmuxName)}
+
+	log.Printf("ttyd: starting on port %d for %s: %s", port, tmuxName, cmd.String())
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start ttyd on port %d: %w", port, err)
 	}
@@ -104,7 +113,10 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 
 	// Monitor process in background — only place that calls Wait on this cmd
 	go func() {
-		_ = cmd.Wait()
+		err := cmd.Wait()
+		if err != nil {
+			log.Printf("ttyd[%s]: exited: %v", tmuxName, err)
+		}
 		t.mu.Lock()
 		defer t.mu.Unlock()
 		// Only clean up if this is still the registered process (not replaced)
@@ -116,6 +128,14 @@ func (t *TtydManager) Start(tmuxName string, port int) error {
 			}
 		}
 	}()
+
+	// Wait for ttyd to start listening (up to 2s)
+	t.mu.Unlock()
+	ready := waitForPort(port, 2*time.Second)
+	t.mu.Lock()
+	if !ready {
+		log.Printf("ttyd[%s]: warning: port %d not ready after timeout", tmuxName, port)
+	}
 
 	return nil
 }
@@ -156,4 +176,50 @@ func (t *TtydManager) StopAll() {
 	for k := range t.portMap {
 		delete(t.portMap, k)
 	}
+}
+
+// waitForPort polls until a TCP connection to 127.0.0.1:port succeeds or timeout expires.
+func waitForPort(port int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return false
+}
+
+// logWriter is an io.Writer that sends each line to the Go logger.
+type logWriter struct {
+	prefix string
+}
+
+func (w *logWriter) Write(p []byte) (int, error) {
+	msg := string(p)
+	for _, line := range splitLines(msg) {
+		if line != "" {
+			log.Printf("%s: %s", w.prefix, line)
+		}
+	}
+	return len(p), nil
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	for len(s) > 0 {
+		i := 0
+		for i < len(s) && s[i] != '\n' {
+			i++
+		}
+		lines = append(lines, s[:i])
+		if i < len(s) {
+			i++ // skip \n
+		}
+		s = s[i:]
+	}
+	return lines
 }

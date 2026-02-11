@@ -72,7 +72,7 @@ else
         fi
     elif [[ -f /etc/debian_version ]]; then
         # Determine codename; lsb_release may be absent on minimal installs
-        local codename
+        codename=""
         if command -v lsb_release &>/dev/null; then
             codename=$(lsb_release -cs)
         elif [[ -f /etc/os-release ]]; then
