@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#1a1a2e">
@@ -62,17 +62,27 @@
     </div>
 
     <!-- Keys Bar -->
-    <div class="keys-bar">
-      <button class="key-btn" data-key="ESC">Esc</button>
-      <button class="key-btn" data-key="TAB">Tab</button>
-      <button class="key-btn" data-key="UP">&uarr;</button>
-      <button class="key-btn" data-key="DOWN">&darr;</button>
-      <button class="key-btn" data-key="LEFT">&larr;</button>
-      <button class="key-btn" data-key="RIGHT">&rarr;</button>
-      <button class="key-btn" data-key="CTRL_C">^C</button>
-      <button class="key-btn" data-key="CTRL_D">^D</button>
-      <button class="key-btn" data-key="ENTER">&crarr;</button>
-      <button class="key-btn intervene-btn" id="intervene-open">Intervene</button>
+    <div class="keys-bar" id="keys-bar">
+      <div class="key-row">
+        <button class="key-btn modifier" data-key="CTRL" data-modifier="ctrl">Ctrl</button>
+        <button class="key-btn" data-key="ESC">Esc</button>
+        <button class="key-btn" data-key="TAB">Tab</button>
+        <button class="key-btn" data-key="PIPE">|</button>
+        <button class="key-btn" data-key="TILDE">~</button>
+        <button class="key-btn" data-key="DASH">-</button>
+        <button class="key-btn" data-key="SLASH">/</button>
+        <button class="key-btn" data-key="UNDERSCORE">_</button>
+      </div>
+      <div class="key-row">
+        <button class="key-btn arrow" data-key="LEFT">&larr;</button>
+        <button class="key-btn arrow" data-key="DOWN">&darr;</button>
+        <button class="key-btn arrow" data-key="UP">&uarr;</button>
+        <button class="key-btn arrow" data-key="RIGHT">&rarr;</button>
+        <button class="key-btn" data-key="CTRL_C">^C</button>
+        <button class="key-btn" data-key="CTRL_D">^D</button>
+        <button class="key-btn intervene-btn" id="intervene-open">Intervene</button>
+        <button class="key-btn enter-btn" data-key="ENTER">Enter</button>
+      </div>
     </div>
   </div>
 

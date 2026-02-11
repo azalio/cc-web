@@ -255,6 +255,69 @@
     }
   }
 
+  // --- Extra Keys: mappings, sticky modifiers, key repeat ---
+  const CHAR_KEYS = {
+    'PIPE': '|', 'TILDE': '~', 'DASH': '-', 'SLASH': '/', 'UNDERSCORE': '_',
+  };
+
+  const modifiers = { ctrl: false };
+
+  function haptic() {
+    if (navigator.vibrate) navigator.vibrate(8);
+  }
+
+  function handleExtraKey(keyName) {
+    haptic();
+
+    // Toggle sticky modifier
+    if (keyName === 'CTRL') {
+      modifiers.ctrl = !modifiers.ctrl;
+      const btn = document.querySelector('.key-btn[data-modifier="ctrl"]');
+      if (btn) btn.classList.toggle('active', modifiers.ctrl);
+      return;
+    }
+
+    // Character keys: send as text directly
+    if (CHAR_KEYS[keyName]) {
+      sendText(CHAR_KEYS[keyName]);
+      resetModifiers();
+      return;
+    }
+
+    // Ctrl+key combos via the keys API
+    const keysToSend = modifiers.ctrl ? ['CTRL_' + keyName] : [keyName];
+
+    // Special: if Ctrl is active and key is a single char concept, handle it
+    sendKeyAction(keysToSend);
+    resetModifiers();
+  }
+
+  function resetModifiers() {
+    if (modifiers.ctrl) {
+      modifiers.ctrl = false;
+      const btn = document.querySelector('.key-btn[data-modifier="ctrl"]');
+      if (btn) btn.classList.remove('active');
+    }
+  }
+
+  // Key repeat for arrows
+  let repeatTimer = null;
+  let repeatInterval = null;
+
+  function startKeyRepeat(keyName) {
+    handleExtraKey(keyName);
+    repeatTimer = setTimeout(() => {
+      repeatInterval = setInterval(() => handleExtraKey(keyName), 80);
+    }, 400);
+  }
+
+  function stopKeyRepeat() {
+    clearTimeout(repeatTimer);
+    clearInterval(repeatInterval);
+    repeatTimer = null;
+    repeatInterval = null;
+  }
+
   async function sendKeyAction(keys) {
     if (!currentSessionId) return;
     try {
@@ -401,13 +464,41 @@
       if (currentSessionId) interruptSession(currentSessionId);
     });
 
-    // Keys bar
-    $$('.key-btn[data-key]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    // Keys bar — use touchstart to prevent focus loss from terminal iframe
+    const keysBar = $('#keys-bar');
+    if (keysBar) {
+      keysBar.addEventListener('touchstart', (e) => {
+        const btn = e.target.closest('.key-btn[data-key]');
+        if (!btn || btn.id === 'intervene-open') return;
+        e.preventDefault(); // Keep terminal focused
         const key = btn.dataset.key;
-        sendKeyAction([key]);
+        if (btn.classList.contains('arrow')) {
+          startKeyRepeat(key);
+        } else {
+          handleExtraKey(key);
+        }
+      }, { passive: false });
+
+      keysBar.addEventListener('touchend', (e) => {
+        if (repeatTimer || repeatInterval) {
+          stopKeyRepeat();
+        }
       });
-    });
+
+      keysBar.addEventListener('touchcancel', () => {
+        stopKeyRepeat();
+      });
+
+      // Fallback for non-touch (desktop testing)
+      $$('.key-btn[data-key]').forEach(btn => {
+        if (btn.id === 'intervene-open') return;
+        btn.addEventListener('click', (e) => {
+          // Skip if touch already handled
+          if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
+          handleExtraKey(btn.dataset.key);
+        });
+      });
+    }
 
     // Intervene button
     $('#intervene-open').addEventListener('click', showIntervene);
@@ -433,6 +524,38 @@
         refreshSessions();
       }
     }, 5000);
+
+    // --- VisualViewport: resize app when soft keyboard opens ---
+    function setupViewportTracking() {
+      if (!window.visualViewport) return;
+
+      function onViewportChange() {
+        // Adjust session view height to visible viewport
+        const vh = window.visualViewport.height;
+        const sessionScreen = $('#session-screen');
+        if (sessionScreen && currentView === 'session') {
+          sessionScreen.style.height = vh + 'px';
+        }
+      }
+
+      window.visualViewport.addEventListener('resize', onViewportChange);
+      window.visualViewport.addEventListener('scroll', onViewportChange);
+    }
+
+    setupViewportTracking();
+
+    // Prevent iOS rubber-band scroll on the session view
+    document.addEventListener('touchmove', (e) => {
+      if (currentView === 'session') {
+        const target = e.target;
+        // Allow scroll inside bottom sheet and sessions list
+        if (target.closest('.bottom-sheet') || target.closest('.sessions-view')) return;
+        // Prevent bounce scroll on terminal view
+        if (target.closest('.session-view')) {
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
 
     // Check if already logged in
     if (authToken) {
