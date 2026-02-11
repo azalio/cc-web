@@ -1,0 +1,27 @@
+# Claude Code Mobile Web Terminal - Configuration
+listen_addr: "127.0.0.1:8787"
+base_url: "http://127.0.0.1:8787"
+
+# Directories where sessions can be created
+projects_allowed:
+  - "/home"
+  - "/tmp"
+
+# tmux session name prefix
+tmux_prefix: "claude-"
+
+# ttyd binary path (leave empty for auto-detect)
+ttyd_path: ""
+
+# Port range for ttyd instances
+ttyd_base_port: 9000
+ttyd_max_port: 9099
+
+# Bearer token for API auth (change this!)
+auth_token: "change-me-to-a-secure-token"
+
+# Maximum concurrent sessions
+max_sessions: 10
+
+# Session data file
+sessions_file: "sessions.json"

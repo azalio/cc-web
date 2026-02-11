@@ -1,0 +1,11 @@
+{
+  "name": "Claude Code Mobile",
+  "short_name": "CC Mobile",
+  "description": "Mobile terminal for Claude Code sessions",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#e94560",
+  "orientation": "any",
+  "icons": []
+}
